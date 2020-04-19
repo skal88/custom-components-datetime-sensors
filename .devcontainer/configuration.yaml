@@ -2,19 +2,17 @@ default_config:
 logger:
   default: error
   logs:
-    custom_components.blueprint: debug
+    custom_components.datetime_sensors: debug
 
+input_datetime:
+  test1:
+    name: Input datetime test 1
+    has_date: False
+    has_time: true
 
-
-blueprint:
-  username: my_username
-  password: my_password
-  binary_sensor:
-    - enabled: true
-      name: My custom name
-  sensor:
-    - enabled: true
-      name: My custom name
-  switch:
-    - enabled: true
-      name: My custom name
+binary_sensor:
+  - platform: datetime_sensors
+    datetime_input: input_datetime.test1
+    name: test1_triggered
+  - platform: datetime_sensors
+    datetime_input: input_datetime.test2

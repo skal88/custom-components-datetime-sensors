@@ -1,0 +1,1 @@
+""" Only component platform """
