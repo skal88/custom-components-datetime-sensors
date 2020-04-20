@@ -4,6 +4,7 @@ import logging
 
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
+import homeassistant.helpers.event as eventHelper
 from homeassistant.components.binary_sensor import (
     BinarySensorDevice,
     PLATFORM_SCHEMA,
@@ -32,6 +33,8 @@ from pytz import timezone
 CONF_DATETIME_INPUT = "datetime_input"
 
 ATTR_DATETIME_INPUT = "input_datetime_entity"
+
+_LOGGER = logging.getLogger(__name__)
 
 # Validations
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -62,14 +65,21 @@ class MyCustomBinarySensor(BinarySensorDevice):
         self._name = config.get(CONF_NAME)
 
         if not config.get(CONF_NAME):
-            self._name = config.get(CONF_DATETIME_INPUT) + DEFAULT_SENSOR_NAME_SUFFIX
+            self._name = (
+                config.get(CONF_DATETIME_INPUT).replace(".", "_")
+                + DEFAULT_SENSOR_NAME_SUFFIX
+            )
 
-        hass.bus.listen(EVENT_STATE_CHANGED, self.state_changed)
-        hass.bus.listen(EVENT_TIME_CHANGED, self.time_changed)
+        # http://dev-docs.home-assistant.io/en/master/api/helpers.html#homeassistant.helpers.event.track_state_change
+        eventHelper.track_state_change(
+            self.hass, self.attr[ATTR_DATETIME_INPUT], self.state_changed
+        )
 
-    def state_changed(self, event):
-        if not event.data[CONF_ENTITY_ID] == self.attr[ATTR_DATETIME_INPUT]:
-            return
+        # http://dev-docs.home-assistant.io/en/master/api/helpers.html#homeassistant.helpers.event.track_time_change
+        eventHelper.track_time_change(self.hass, self.time_changed)
+
+    def state_changed(self, entity_id, old_state, new_state):
+        _LOGGER.debug("state_changed %s %s %s" % (entity_id, old_state, new_state))
 
         self.update()
 
@@ -79,7 +89,9 @@ class MyCustomBinarySensor(BinarySensorDevice):
     def update(self):
         input_datetime = self.hass.states.get(self.attr[ATTR_DATETIME_INPUT])
         if not input_datetime:
-            return STATE_UNKNOWN
+            self._status = STATE_UNKNOWN
+            self.hass_state_update()
+            return
 
         now = dt.as_local(datetime.datetime.now())
         now_time = datetime.datetime(
@@ -94,11 +106,6 @@ class MyCustomBinarySensor(BinarySensorDevice):
             input_datetime.attributes["minute"],
         )
 
-        #  Refactor - Use homeassistant utils:
-        # https://dev-docs.home-assistant.io/en/master/api/util.html#module-homeassistant.util.dt
-
-        last_state = self._status
-
         if datetime.datetime.timestamp(now_time) == datetime.datetime.timestamp(
             input_time
         ):
@@ -106,10 +113,12 @@ class MyCustomBinarySensor(BinarySensorDevice):
         else:
             self._status = STATE_OFF
 
-        if last_state != self._status:
-            self.hass.states.set(DOMAIN + "." + self._name, self._status, self.attr)
+        self.hass_state_update()
 
         return self._status
+
+    def hass_state_update(self):
+        self.hass.states.set(DOMAIN + "." + self._name, self._status, self.attr)
 
     @property
     def unique_id(self):
