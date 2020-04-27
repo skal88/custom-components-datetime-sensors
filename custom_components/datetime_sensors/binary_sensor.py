@@ -2,6 +2,7 @@
 
 import logging
 
+from copy import copy
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 import homeassistant.helpers.event as eventHelper
@@ -78,6 +79,8 @@ class MyCustomBinarySensor(BinarySensorDevice):
         # http://dev-docs.home-assistant.io/en/master/api/helpers.html#homeassistant.helpers.event.track_time_change
         eventHelper.track_time_change(self.hass, self.time_changed)
 
+        self.hass_state_update()
+
     def state_changed(self, entity_id, old_state, new_state):
         _LOGGER.debug("state_changed %s %s %s" % (entity_id, old_state, new_state))
 
@@ -106,6 +109,8 @@ class MyCustomBinarySensor(BinarySensorDevice):
             input_datetime.attributes["minute"],
         )
 
+        last_status = copy(self._status)
+
         if datetime.datetime.timestamp(now_time) == datetime.datetime.timestamp(
             input_time
         ):
@@ -113,7 +118,9 @@ class MyCustomBinarySensor(BinarySensorDevice):
         else:
             self._status = STATE_OFF
 
-        self.hass_state_update()
+        # Update status if has changed
+        if last_status != self._status:
+            self.hass_state_update()
 
         return self._status
 
